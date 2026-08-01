@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!--
+    A frame with a play triangle knocked out of it: the whole app in one glyph —
+    a still becomes something that moves. The gradient is the same Instagram
+    spectrum the wordmark and the flow arrows carry, running on the same
+    diagonal, so the tab icon and the page read as one thing.
+
+    Knocked out rather than drawn on top, because at 16px a white shape floating
+    inside a coloured square turns to mush; a hole keeps its edges.
+  -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#5851db"/>
+      <stop offset="0.24" stop-color="#833ab4"/>
+      <stop offset="0.48" stop-color="#c13584"/>
+      <stop offset="0.66" stop-color="#e1306c"/>
+      <stop offset="0.85" stop-color="#f56040"/>
+      <stop offset="1" stop-color="#fcaf45"/>
+    </linearGradient>
+    <mask id="cut">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M26 20.5 46 32 26 43.5Z" fill="#000" stroke="#000" stroke-width="5"
+            stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)" mask="url(#cut)"/>
+</svg>
