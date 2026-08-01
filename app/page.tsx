@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Track } from "@/lib/music";
 import type { ProjectSummary } from "@/lib/projects";
+import type { Style } from "@/lib/styles";
 import type { Version } from "@/lib/versions";
 import type { Material, StudioEvent } from "@/lib/types";
 
@@ -55,6 +56,9 @@ export default function Page() {
   const [links, setLinks] = useState<string[]>([]);
   // The link box is open, and what is in it.
   const [linking, setLinking] = useState<string | null>(null);
+  // The looks you have saved, and the name box for saving another.
+  const [styles, setStyles] = useState<Style[]>([]);
+  const [naming, setNaming] = useState<string | null>(null);
   const [events, setEvents] = useState<StudioEvent[]>([]);
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<"live" | "replay">("live");
@@ -94,6 +98,13 @@ export default function Page() {
     if (!res.ok) return;
     const data = await res.json();
     setProjects(data.projects ?? []);
+  }, []);
+
+  const loadStyles = useCallback(async () => {
+    const res = await fetch("/api/styles", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    setStyles(data.styles ?? []);
   }, []);
 
   /**
@@ -141,7 +152,8 @@ export default function Page() {
 
   useEffect(() => {
     void loadProjects();
-  }, [loadProjects]);
+    void loadStyles();
+  }, [loadProjects, loadStyles]);
 
   useEffect(() => {
     void loadState();
@@ -233,8 +245,9 @@ export default function Page() {
       if (event.kind === "status" && event.label === "asked") setRunning(true);
       if (event.kind === "done") {
         setRunning(false);
-        // A finished turn may have added materials or a render.
+        // A finished turn may have added materials, a render, or a style.
         void loadState();
+        void loadStyles();
       }
       if (event.kind === "video" && event.path) {
         setVideo(event.path);
@@ -246,7 +259,7 @@ export default function Page() {
     };
 
     return () => source.close();
-  }, [loadState, project]);
+  }, [loadState, loadStyles, project]);
 
   // Follow the tail unless the user has scrolled up to read something.
   useEffect(() => {
@@ -262,30 +275,40 @@ export default function Page() {
 
   // -- actions -------------------------------------------------------------
 
-  const send = async () => {
-    const text = prompt.trim();
-    if (!text || running || busy) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      const slug = await ensureProject();
-      if (!slug) return;
-      const res = await fetch(`/api/run?p=${encodeURIComponent(slug)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, about }),
-      });
-      if (res.ok) {
-        setPrompt("");
-        setAbout(null);
-        setMode("live");
-      } else {
+  /** Say something to the agent. The composer is one caller; Save this style is another. */
+  const ask = useCallback(
+    async (text: string) => {
+      const said = text.trim();
+      if (!said || running || busy) return false;
+      setBusy(true);
+      setNotice("");
+      try {
+        const slug = await ensureProject();
+        if (!slug) return false;
+        const res = await fetch(`/api/run?p=${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: said, about }),
+        });
+        if (res.ok) {
+          setAbout(null);
+          setMode("live");
+          return true;
+        }
         const data = await res.json().catch(() => ({}));
         setNotice(data.error ?? "The build did not start. Check the terminal running the app.");
+        return false;
+      } finally {
+        setBusy(false);
       }
-    } finally {
-      setBusy(false);
-    }
+    },
+    [about, busy, ensureProject, running],
+  );
+
+  // The box empties only once the message is away, so a refused send doesn't
+  // take the sentence with it.
+  const send = async () => {
+    if (await ask(prompt)) setPrompt("");
   };
 
   /** Put a sentence in the box and leave the cursor at the end of it. */
@@ -735,6 +758,24 @@ export default function Page() {
             </div>
 
             <div className="composer">
+              {/* The looks you have saved. A style you cannot remember the name
+                  of is a style you will never use again, so the names live here,
+                  next to the box where you would say one. */}
+              {styles.length > 0 && (
+                <div className="styles">
+                  <span className="styles-what">Your styles</span>
+                  {styles.map((s) => (
+                    <button
+                      key={s.name}
+                      title={s.says ?? `Use the ${s.title} style`}
+                      onClick={() => say(useStyle(s.name))}
+                    >
+                      {s.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Picking an older cut in the rail is how you point at it. Saying
                   so here, where the message is written, keeps it from being a
                   hidden change of meaning — and it can be taken back. */}
@@ -779,15 +820,32 @@ export default function Page() {
               {/* A style is worth more than the video that carried it. Saving
                   one is a sentence, not a feature: the button writes the
                   sentence and you name the style yourself. */}
-              {video && (
-                <button
-                  className="keep"
-                  disabled={running}
-                  onClick={() => say("Save this video's style as a skill I can reuse. Call it ")}
-                >
-                  Save this style
-                </button>
-              )}
+              {video &&
+                (naming === null ? (
+                  <button className="keep" disabled={running} onClick={() => setNaming("")}>
+                    Save this style
+                  </button>
+                ) : (
+                  /* Name it here, in the place the button was. The name is the
+                     whole of what saving needs from you — everything else the
+                     agent can read off the video it just made. */
+                  <input
+                    className="keep-box"
+                    autoFocus
+                    value={naming}
+                    placeholder="Name this style"
+                    onChange={(e) => setNaming(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const name = naming.trim();
+                        setNaming(null);
+                        if (name) void ask(saveStyle(name));
+                      }
+                      if (e.key === "Escape") setNaming(null);
+                    }}
+                    onBlur={() => setNaming(null)}
+                  />
+                ))}
             </div>
             <div className="lighttable">
               {video ? (
@@ -898,6 +956,34 @@ function postProgress(
     xhr.onerror = () => reject(new Error("upload failed"));
     xhr.send(body);
   });
+}
+
+/**
+ * The two sentences that make styles work.
+ *
+ * Both are plain English aimed at the agent, because that is the whole control
+ * surface of this app — a button here writes a sentence, it never calls an API
+ * the agent doesn't have. The skill name is stated explicitly so the folder it
+ * writes and the folder the studio lists are the same folder.
+ */
+function saveStyle(name: string): string {
+  return [
+    `Save this video's style as a reusable skill named "${name}".`,
+    `Write it to .claude/skills/${slug(name)}/SKILL.md, describing the look, the`,
+    `pacing, the captions and the music in enough detail to rebuild it on`,
+    `completely different material. Include any script you used.`,
+  ].join(" ");
+}
+
+function useStyle(name: string): string {
+  return `Use my saved "${name}" style for this. `;
+}
+
+function slug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 /** Elapsed time, in the shape a person reads off a stopwatch. */

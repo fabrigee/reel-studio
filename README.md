@@ -160,15 +160,25 @@ what it can find for you, and the sentence that gets each one. It reads in a
 minute and is deliberately the quietest thing in the header — it answers a
 question you have once, before you start.
 
-## Saving a style
+## Saving a style, and using it again
 
-When a video looks the way you want, press Save this style. It writes the
-sentence for you; name the style and send it. The agent turns what it just built
-into a skill under `.claude/skills/`, and from then on you can ask for that style
-by name on completely different material.
+When a video looks the way you want, press Save this style, type a name, press
+return. That is the whole of it — the name is the only thing saving needs from
+you, because everything else the agent can read off the video it just made.
 
-That is all a skill is here — a folder with a markdown file in it describing how
-something should look. Nothing about it is specific to this app.
+The saved style then appears as a chip above the chat box, under Your styles.
+Click it and the sentence lands in the box: "Use my saved X style for this."
+Add whatever else you want and press Build. It applies to completely different
+material — that is the point of saving one.
+
+A style is a Claude Code skill, and that is not a metaphor: it is a folder with
+a `SKILL.md` in `.claude/skills/`, exactly like the workflows that ship with
+this app, found by the agent the same way. Nothing about it is specific to this
+app, and you can edit or delete one by hand.
+
+The studio knows which skills are yours by knowing which ones came with it —
+anything else in that folder is a style you saved. No registry, no marker, and
+no cooperation needed from the agent that wrote it.
 
 ## Everything is in this folder
 

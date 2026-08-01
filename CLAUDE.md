@@ -34,11 +34,16 @@ a track elsewhere on the machine.
 ## Styles
 
 Saved styles are skills in .claude/skills/. Before inventing a look, check
-whether one of them already describes it.
+whether one of them already describes it. When they name one — "use my Paris
+style" — read that skill and follow it; it is a description of a look, not of
+the material it was first used on, so apply it to whatever is in this project.
 
-When they ask to save a style, write a new skill folder there: a SKILL.md that
-describes the look, the pacing, the captions and the music in enough detail to
-rebuild it on different material, plus any script you used to make it.
+When they ask to save a style, they will give you a name and the folder to
+write. Use exactly that folder, so the app can list it back to them. The
+SKILL.md describes the look, the pacing, the captions and the music in enough
+detail to rebuild it on completely different material, plus any script you
+used. Give it a frontmatter description of one line — that line is what they
+see when they hover the style later.
 
 ## How to talk
 

@@ -143,7 +143,10 @@ export default function Docs() {
             <li>Say the outcome, not the steps.</li>
             <li>One change per message.</li>
             <li>Click an earlier cut to talk about that one.</li>
-            <li>Like the look? Save this style, and ask for it by name later.</li>
+            <li>
+              Like the look? Save this style, name it, and it becomes a chip
+              above the box — click it to use it on anything else.
+            </li>
           </ul>
 
           <p className="lede small">

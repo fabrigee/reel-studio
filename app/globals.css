@@ -1527,6 +1527,61 @@ button:disabled {
 
 /* ------------------------------------------------------- what to say to it */
 
+/* The looks you have saved, above the box where you would ask for one. Absent
+   entirely until you save your first — an empty rail teaching a feature is the
+   kind of clutter this panel exists without. */
+.styles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.styles-what {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  color: var(--ash-dim);
+  margin-right: 2px;
+}
+
+.styles button {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 175, 69, 0.32);
+  background: rgba(252, 175, 69, 0.08);
+  color: var(--ig-gold);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.styles button:hover {
+  background: rgba(252, 175, 69, 0.18);
+  border-color: rgba(252, 175, 69, 0.55);
+}
+
+/* Naming a style, in the place the button was. */
+.keep-box {
+  margin-left: auto;
+  width: 190px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 175, 69, 0.5);
+  background: rgba(252, 175, 69, 0.1);
+  color: var(--chalk);
+  font-family: var(--sans);
+  font-size: 12px;
+  outline: none;
+}
+
+.keep-box::placeholder {
+  color: var(--ash-dim);
+}
+
 /* Keeping a look you like. It sits on the heading rather than under the video
    because it is about the video as a whole, not about the frame on screen. */
 .keep {
