@@ -505,6 +505,48 @@ body {
   border-color: var(--edge-strong);
 }
 
+/* An upload in flight. It takes the whole dock, because the one thing it has
+   to do is be impossible to miss while you wait. */
+.adding {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.adding-say {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.adding-pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--ash-dim);
+}
+
+.adding-rail {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.adding-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--go-slice);
+  transform-origin: left center;
+  /* The bar is driven by real bytes, so it only ever needs to catch up to the
+     last report — never to guess ahead of one. */
+  transition: transform 180ms linear;
+}
+
 .link-box {
   flex: 1;
   min-width: 0;

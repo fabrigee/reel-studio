@@ -70,6 +70,9 @@ export default function Page() {
   const pinnedRef = useRef(true);
   // What is on screen, readable outside a state updater.
   const videoRef = useRef<string | null>(null);
+  // Which state request is the current one, so a slow early answer cannot
+  // overwrite a fast later one.
+  const loadSeq = useRef(0);
 
   const shelfRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +81,8 @@ export default function Page() {
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [adding, setAdding] = useState(false);
+  // An upload in flight: how many files, and how much of them has gone.
+  const [adding, setAdding] = useState<{ files: number; pct: number } | null>(null);
   // dragenter/dragleave fire for every child the pointer crosses, so the state
   // has to count depth rather than trust the last event.
   const dragDepth = useRef(0);
@@ -92,11 +96,23 @@ export default function Page() {
     setProjects(data.projects ?? []);
   }, []);
 
-  const loadState = useCallback(async () => {
-    if (!project) return;
-    const res = await fetch(`/api/state?p=${encodeURIComponent(project)}`);
+  /**
+   * Load everything about a project.
+   *
+   * `slug` may be passed explicitly, and callers that just created a project
+   * must: `project` is state, so a function created in this render still sees
+   * the old value — which was null — and would quietly load nothing.
+   */
+  const loadState = useCallback(
+    async (slug?: string) => {
+    const which = slug ?? project;
+    if (!which) return;
+    const mine = (loadSeq.current += 1);
+    const res = await fetch(`/api/state?p=${encodeURIComponent(which)}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
+    // A slower earlier request must not overwrite a newer answer.
+    if (mine !== loadSeq.current) return;
     const cuts: Version[] = data.versions ?? [];
     setMaterials(data.materials);
     setMusic(data.music ?? []);
@@ -115,7 +131,9 @@ export default function Page() {
     }
     // Don't yank the panel off a render that a finished run announced.
     setVideo((current) => current ?? data.state.video);
-  }, [project]);
+    },
+    [project],
+  );
 
   useEffect(() => {
     videoRef.current = video;
@@ -290,30 +308,40 @@ export default function Page() {
   const add = useCallback(
     async (list: FileList | null) => {
       if (!list || list.length === 0) return;
+      const files = Array.from(list);
       const body = new FormData();
-      for (const file of Array.from(list)) body.append("files", file);
-      setAdding(true);
+      for (const file of files) body.append("files", file);
+
+      // Dropping sixty camera originals is a real wait, and a wait with nothing
+      // moving reads as nothing happening. XHR is used instead of fetch for one
+      // reason: it reports upload progress, and fetch still cannot.
+      setAdding({ files: files.length, pct: 0 });
       setNotice("");
       try {
         const slug = await ensureProject();
         if (!slug) return;
-        const res = await fetch(`/api/upload?p=${encodeURIComponent(slug)}`, {
-          method: "POST",
+        const { ok, data } = await postProgress(
+          `/api/upload?p=${encodeURIComponent(slug)}`,
           body,
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
+          (pct) => setAdding((was) => (was ? { ...was, pct } : was)),
+        );
+        if (!ok) {
           setNotice(data.error ?? "Those files could not be added.");
         } else if (data.rejected?.length) {
           setNotice(
-            `Added ${data.added.length}. Skipped ${data.rejected.length} — photos, video, audio and notes only.`,
+            `Added ${data.added?.length ?? 0}. Skipped ${data.rejected.length} — photos, video, audio and notes only.`,
           );
         }
-        await loadState();
+        // Straight from the answer: the panel fills the moment the files land,
+        // and it does so even when this drop is what created the project.
+        if (data.materials) setMaterials(data.materials);
+        // The rest of the panel — music, links, cuts — still comes from state,
+        // named explicitly because `slug` may be newer than this closure knows.
+        await loadState(slug);
       } catch {
         setNotice("Those files could not be added.");
       } finally {
-        setAdding(false);
+        setAdding(null);
       }
     },
     [loadState, ensureProject],
@@ -616,15 +644,26 @@ export default function Page() {
             {/* The other half of the affordance: dragging is invisible until you
                 try it, so there is a button that does the same thing. */}
             <div className="dock">
-              {linking === null ? (
+              {/* An upload takes over the dock rather than dimming a button in
+                  it. Sixty camera originals is a real wait, and the panel has
+                  to be visibly busy for it. */}
+              {adding ? (
+                <div className="adding">
+                  <div className="adding-say">
+                    <span>
+                      Adding {adding.files} file{adding.files === 1 ? "" : "s"}
+                    </span>
+                    <span className="adding-pct">{Math.round(adding.pct * 100)}%</span>
+                  </div>
+                  <div className="adding-rail">
+                    <div className="adding-fill" style={{ transform: `scaleX(${adding.pct})` }} />
+                  </div>
+                </div>
+              ) : linking === null ? (
                 <>
-                  <button
-                    className="pick"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={adding}
-                  >
+                  <button className="pick" onClick={() => fileRef.current?.click()}>
                     <PlusIcon />
-                    {adding ? "Adding…" : "Add files"}
+                    Add files
                   </button>
                   <button className="pick ghost" onClick={() => setLinking("")}>
                     <ChainIcon />
@@ -820,6 +859,45 @@ function Working({ since }: { since: number | null }) {
       {seconds !== null && <span className="working-clock">{clock(seconds)}</span>}
     </div>
   );
+}
+
+/**
+ * POST a body and report how much of it has gone.
+ *
+ * `fetch` still has no upload progress — the request body is a black box until
+ * the response arrives — so this one call is XHR. Everything else in the app is
+ * fetch, and should stay that way.
+ */
+type Answer = {
+  error?: string;
+  added?: string[];
+  rejected?: string[];
+  materials?: Material[];
+};
+
+function postProgress(
+  url: string,
+  body: FormData,
+  onProgress: (pct: number) => void,
+): Promise<{ ok: boolean; data: Answer }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.min(1, e.loaded / e.total));
+    };
+    xhr.onload = () => {
+      let data: Answer = {};
+      try {
+        data = JSON.parse(xhr.responseText) as Answer;
+      } catch {
+        // A non-JSON body is a failure with no message; the status still tells.
+      }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 400, data });
+    };
+    xhr.onerror = () => reject(new Error("upload failed"));
+    xhr.send(body);
+  });
 }
 
 /** Elapsed time, in the shape a person reads off a stopwatch. */

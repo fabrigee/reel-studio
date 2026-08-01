@@ -219,6 +219,20 @@ Two rules that look like bugs if you don't know them:
   (`?p=<slug>`), which is what lets two projects be open in two tabs with a run
   going in each. Sessions have always been keyed by folder; only the UI was
   single-project.
+- **An upload answers with the new list of materials**, and the panel takes it
+  from there rather than fetching state again. The reload used to go through a
+  closure over "the current project", which is null when the very drop being
+  handled is what created the project — so sixty files landed on disk and the
+  panel stayed empty until you switched reels and came back. The effect that
+  would have caught it fires the moment the project is set, which is *before*
+  the upload finishes, so it saw an empty folder. Answering with the truth
+  removes the round trip and the whole class of bug. `loadState` also takes an
+  explicit slug now, and carries a sequence number so a slow early answer can't
+  overwrite a fast later one.
+- **The upload is the one XHR in the app.** `fetch` still cannot report upload
+  progress, and sixty camera originals is a real wait — a wait with nothing
+  moving reads as nothing happening. The dock turns into a labelled progress
+  bar driven by actual bytes.
 - **A rename moves the live agent with the folder** — `moveSession` re-keys it,
   and the next message tells the agent the new path, because its opening turn
   named the old one and it would otherwise render into a folder that is gone.

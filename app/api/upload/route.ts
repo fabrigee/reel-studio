@@ -76,7 +76,13 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ added, rejected });
+  // The fresh list travels back with the answer rather than being fetched
+  // again. The client used to reload state afterwards, and that reload went
+  // through a closure over "the current project" — which is null when this same
+  // drop is what created the project, so the files landed on disk and the panel
+  // stayed empty until you switched away and back. Answering with the truth
+  // removes the round trip and the whole class of bug with it.
+  return NextResponse.json({ added, rejected, materials: scanMaterials(root) });
 }
 
 /** The folder that already holds most of this kind, else a sensible default. */
