@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import path from "path";
-import { createProject, listProjects, projectsRoot, renameProject, resolveProject } from "@/lib/projects";
-import { moveSession } from "@/lib/session";
+import {
+  createProject,
+  deleteProject,
+  listProjects,
+  projectsRoot,
+  renameProject,
+  resolveProject,
+} from "@/lib/projects";
+import { dropSession, moveSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -72,4 +79,26 @@ export async function PATCH(req: Request) {
 
   moveSession(before, path.join(projectsRoot(), next));
   return NextResponse.json({ slug: next });
+}
+
+/**
+ * Delete a project: `DELETE /api/projects?p=<slug>`.
+ *
+ * The folder is the project, so deleting one is removing the other — and its
+ * live agent goes first, or a "deleted" reel would keep rendering into a
+ * folder that is gone, and a new reel under the same name would inherit a
+ * conversation about material it has never seen.
+ */
+export async function DELETE(req: Request) {
+  const slug = new URL(req.url).searchParams.get("p");
+  const full = slug ? resolveProject(slug) : null;
+  if (!slug || !full) {
+    return NextResponse.json({ error: "No such project." }, { status: 404 });
+  }
+
+  await dropSession(full);
+  if (!deleteProject(slug)) {
+    return NextResponse.json({ error: "Could not delete the folder." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }

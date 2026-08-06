@@ -154,6 +154,25 @@ export function renameProject(slug: string, name: string): string | null {
   return next;
 }
 
+/**
+ * Delete a project, for good.
+ *
+ * resolveProject is the whole guard: a traversal, a bad name or a folder that
+ * isn't there never reaches the rm. What does reach it is removed with
+ * everything in it — the folder IS the project, so deleting one is exactly
+ * deleting the other, with nothing left behind to reconcile.
+ */
+export function deleteProject(slug: string): boolean {
+  const full = resolveProject(slug);
+  if (!full) return false;
+  try {
+    fs.rmSync(full, { recursive: true, force: true });
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 /** The date prefix is for sorting on disk; a person reads the rest. */
 function displayName(slug: string): string {
   const bare = slug.replace(/^\d{4}-\d{2}-\d{2}[_-]?/, "");

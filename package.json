@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev -p 4321",
     "build": "next build",
-    "start": "next start -p 4321"
+    "start": "next start -p 4321",
+    "test": "vitest run"
   },
   "dependencies": {
     "next": "^15.5.20",
@@ -20,6 +21,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

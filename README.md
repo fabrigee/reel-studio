@@ -180,6 +180,13 @@ The studio knows which skills are yours by knowing which ones came with it —
 anything else in that folder is a style you saved. No registry, no marker, and
 no cooperation needed from the agent that wrote it.
 
+A style does not have to come from a video the studio made. New style from a
+video, at the end of the chips, takes a video you admire — yours or anyone's —
+uploads it into the project like any other clip, and has the agent study it:
+a few frames pulled out with ffmpeg and looked at on your own machine, no
+external service. Name it, press return, and the look joins the rail as a chip
+you can apply to your own material.
+
 ## Everything is in this folder
 
 The studio runs Claude Code with this folder as its working directory, which
@@ -217,6 +224,12 @@ open in Finder and copy to another machine, and a project called "reel" on disk
 while the app calls it something else is two names for one thing. The date
 prefix is kept, since that is what orders the folder and not the part anyone is
 renaming.
+
+Deleting is in the switcher too: Delete under the current reel, a bin on every
+row of the list. It takes two clicks — the first turns the button red and makes
+it say what it is about to do — because it removes the folder from disk and
+there is no undo. If the reel had a live agent, that run is stopped and
+forgotten with it.
 
 Two rules that look like bugs if you don't know them:
 

@@ -45,6 +45,15 @@ detail to rebuild it on completely different material, plus any script you
 used. Give it a frontmatter description of one line — that line is what they
 see when they hover the style later.
 
+A style can also come from a video they admired rather than one you made.
+When the message points at a reference video and asks for its style, study it
+on this machine only: use ffmpeg to extract a handful of evenly spaced frames
+and look at the frames yourself, then describe what you saw in simple terms —
+palette, framing, captions, pacing and cuts, motion, the mood of any music.
+Never send the video to an external service, and do not render anything; the
+written-down look is the whole deliverable. Then write the skill exactly as
+above.
+
 ## How to talk
 
 Say what you are doing in plain sentences, the way you would to a friend. No

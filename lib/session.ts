@@ -208,6 +208,35 @@ export class StudioSession {
     }
   }
 
+  /**
+   * Stop, and resolve only once the run's process has actually exited.
+   *
+   * stop() alone is enough for the Stop button — the panel doesn't care when
+   * the OS is finished. Deleting a project does: its folder is removed the
+   * moment this returns, and a render dying slowly can write files after the
+   * rm, leaving a half-resurrected "deleted" folder. A process that shrugs
+   * off the SIGTERM gets two seconds, then a SIGKILL.
+   */
+  halt(): Promise<void> {
+    const child = this.proc;
+    this.stop();
+    if (!child || child.exitCode !== null) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // Already gone, which is the outcome being waited for.
+        }
+        resolve();
+      }, 2000);
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
   private onStdout(chunk: string) {
     // Claude Code emits one JSON object per line, but a chunk boundary can fall
     // mid-line — hold the partial tail until its newline arrives.
@@ -605,6 +634,33 @@ export function moveSession(from: string, to: string): void {
 
   map.set(now, session);
   map.delete(was);
+}
+
+/**
+ * Forget a project's session — its folder is being deleted, and a live agent
+ * left running would keep rendering into a folder that no longer exists, then
+ * haunt any new project recreated under the same name.
+ *
+ * The map entry goes first, so a project recreated under the same name mid-
+ * teardown gets a fresh session rather than this dying one. halt() is awaited
+ * so the caller can rm the folder knowing the process is actually gone — but
+ * an instance from before halt() existed may still be in the map after a hot
+ * reload (see moveSession), so its absence falls back to stop(), which every
+ * vintage has. The guard is for a dying process, which must not keep the
+ * folder alive.
+ */
+export async function dropSession(root: string): Promise<void> {
+  const map = store.__reelStudioSessions!;
+  const key = path.resolve(root);
+  const session = map.get(key);
+  if (!session) return;
+  map.delete(key);
+  try {
+    if (typeof session.halt === "function") await session.halt();
+    else session.stop();
+  } catch {
+    // However the stop went, the session is still forgotten.
+  }
 }
 
 export function getSession(project: string): StudioSession {

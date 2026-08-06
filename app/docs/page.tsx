@@ -147,6 +147,15 @@ export default function Docs() {
               Like the look? Save this style, name it, and it becomes a chip
               above the box — click it to use it on anything else.
             </li>
+            <li>
+              Admire someone else&rsquo;s video? New style from a video, above
+              the box, studies a few frames of it on your machine and saves the
+              look as a chip too.
+            </li>
+            <li>
+              Done with a reel? The switcher by the wordmark deletes it — two
+              clicks, because there is no undo.
+            </li>
           </ul>
 
           <p className="lede small">

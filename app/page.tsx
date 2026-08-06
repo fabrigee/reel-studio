@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Track } from "@/lib/music";
+import { saveStyle, styleFromVideo, useStyle } from "@/lib/prompts";
 import type { ProjectSummary } from "@/lib/projects";
 import type { Style } from "@/lib/styles";
 import type { Version } from "@/lib/versions";
@@ -59,6 +60,9 @@ export default function Page() {
   // The looks you have saved, and the name box for saving another.
   const [styles, setStyles] = useState<Style[]>([]);
   const [naming, setNaming] = useState<string | null>(null);
+  // A reference video picked for a new style, waiting on its name.
+  const [styleVideo, setStyleVideo] = useState<File | null>(null);
+  const [styleName, setStyleName] = useState("");
   const [events, setEvents] = useState<StudioEvent[]>([]);
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<"live" | "replay">("live");
@@ -84,6 +88,7 @@ export default function Page() {
   const capacity = useSheetCapacity(shelfRef, sheetRef, audioRef, materials);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const styleFileRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
   // An upload in flight: how many files, and how much of them has gone.
   const [adding, setAdding] = useState<{ files: number; pct: number } | null>(null);
@@ -329,8 +334,8 @@ export default function Page() {
   // -- putting things in ---------------------------------------------------
 
   const add = useCallback(
-    async (list: FileList | null) => {
-      if (!list || list.length === 0) return;
+    async (list: FileList | File[] | null): Promise<Answer | null> => {
+      if (!list || list.length === 0) return null;
       const files = Array.from(list);
       const body = new FormData();
       for (const file of files) body.append("files", file);
@@ -342,7 +347,7 @@ export default function Page() {
       setNotice("");
       try {
         const slug = await ensureProject();
-        if (!slug) return;
+        if (!slug) return null;
         const { ok, data } = await postProgress(
           `/api/upload?p=${encodeURIComponent(slug)}`,
           body,
@@ -361,13 +366,61 @@ export default function Page() {
         // The rest of the panel — music, links, cuts — still comes from state,
         // named explicitly because `slug` may be newer than this closure knows.
         await loadState(slug);
+        // The answer travels back so a caller can see where its files landed —
+        // the style-from-video flow needs the path to talk about the upload.
+        return ok ? data : null;
       } catch {
         setNotice("Those files could not be added.");
+        return null;
       } finally {
         setAdding(null);
       }
     },
     [loadState, ensureProject],
+  );
+
+  /**
+   * A style from a video you admire rather than one this studio made: the
+   * reference lands in the project like any other clip, then the agent is
+   * asked to study a few frames of it locally and write the look down as a
+   * skill — see styleFromVideo in lib/prompts.
+   */
+  const addStyleFromVideo = useCallback(
+    async (file: File, name: string) => {
+      const data = await add([file]);
+      const rel = data?.added?.[0];
+      if (!rel) return; // add() already said what went wrong
+      // The chip is disabled during a run, but a run can begin while the
+      // upload is in flight — and then the video is in the pile with nothing
+      // saying why no style appeared.
+      if (!(await ask(styleFromVideo(name, rel)))) {
+        setNotice(
+          `The video is in. Ask again for the "${name}" style once the current run finishes.`,
+        );
+      }
+    },
+    [add, ask],
+  );
+
+  /**
+   * Delete a reel, for good. The server removes the folder and forgets its
+   * agent; if it was the one on screen, the studio opens on a fresh reel —
+   * there is nothing left to look at.
+   */
+  const dropProject = useCallback(
+    async (slug: string) => {
+      const res = await fetch(`/api/projects?p=${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setNotice(data.error ?? "That reel could not be deleted.");
+        return;
+      }
+      if (slug === project) openProject(null);
+      void loadProjects();
+    },
+    [project, openProject, loadProjects],
   );
 
   /**
@@ -494,6 +547,7 @@ export default function Page() {
             projects={projects}
             onOpen={openProject}
             onRenamed={renameProject}
+            onDelete={dropProject}
           />
           {running && (
             <div className="state" data-state={state}>
@@ -760,21 +814,66 @@ export default function Page() {
             <div className="composer">
               {/* The looks you have saved. A style you cannot remember the name
                   of is a style you will never use again, so the names live here,
-                  next to the box where you would say one. */}
-              {styles.length > 0 && (
-                <div className="styles">
-                  <span className="styles-what">Your styles</span>
-                  {styles.map((s) => (
-                    <button
-                      key={s.name}
-                      title={s.says ?? `Use the ${s.title} style`}
-                      onClick={() => say(useStyle(s.name))}
-                    >
-                      {s.title}
-                    </button>
-                  ))}
-                </div>
-              )}
+                  next to the box where you would say one — along with the one
+                  way to mint a style before you have made anything: hand over a
+                  video whose look you want kept. */}
+              <div className="styles">
+                {styles.length > 0 && <span className="styles-what">Your styles</span>}
+                {styles.map((s) => (
+                  <button
+                    key={s.name}
+                    title={s.says ?? `Use the ${s.title} style`}
+                    onClick={() => say(useStyle(s.name))}
+                  >
+                    {s.title}
+                  </button>
+                ))}
+                {styleVideo === null ? (
+                  <button
+                    className="style-add"
+                    disabled={running || busy}
+                    title="Pick a video whose look you want to keep as a style"
+                    onClick={() => styleFileRef.current?.click()}
+                  >
+                    <PlusIcon />
+                    New style from a video
+                  </button>
+                ) : (
+                  /* The video is picked; the name is the only thing left to
+                     say, so the box appears where the button was. */
+                  <input
+                    className="keep-box"
+                    autoFocus
+                    value={styleName}
+                    placeholder="Name this style"
+                    onChange={(e) => setStyleName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const name = styleName.trim();
+                        const file = styleVideo;
+                        setStyleVideo(null);
+                        if (name && file) void addStyleFromVideo(file, name);
+                      }
+                      if (e.key === "Escape") setStyleVideo(null);
+                    }}
+                    onBlur={() => setStyleVideo(null)}
+                  />
+                )}
+                <input
+                  ref={styleFileRef}
+                  type="file"
+                  accept="video/*"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file) {
+                      setStyleVideo(file);
+                      setStyleName("");
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </div>
 
               {/* Picking an older cut in the rail is how you point at it. Saying
                   so here, where the message is written, keeps it from being a
@@ -958,34 +1057,6 @@ function postProgress(
   });
 }
 
-/**
- * The two sentences that make styles work.
- *
- * Both are plain English aimed at the agent, because that is the whole control
- * surface of this app — a button here writes a sentence, it never calls an API
- * the agent doesn't have. The skill name is stated explicitly so the folder it
- * writes and the folder the studio lists are the same folder.
- */
-function saveStyle(name: string): string {
-  return [
-    `Save this video's style as a reusable skill named "${name}".`,
-    `Write it to .claude/skills/${slug(name)}/SKILL.md, describing the look, the`,
-    `pacing, the captions and the music in enough detail to rebuild it on`,
-    `completely different material. Include any script you used.`,
-  ].join(" ");
-}
-
-function useStyle(name: string): string {
-  return `Use my saved "${name}" style for this. `;
-}
-
-function slug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 /** Elapsed time, in the shape a person reads off a stopwatch. */
 function clock(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -1007,18 +1078,27 @@ function Switcher({
   projects,
   onOpen,
   onRenamed,
+  onDelete,
 }: {
   current: string | null;
   projects: ProjectSummary[];
   onOpen: (slug: string | null) => void;
   onRenamed: (name: string) => void;
+  onDelete: (slug: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [naming, setNaming] = useState<string | null>(null);
+  // The reel whose delete button has been pressed once. Deleting is the one
+  // thing in this menu with no undo, so it takes a second click — on a button
+  // that has turned red and says what it is about to do.
+  const [axing, setAxing] = useState<string | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!open) setNaming(null);
+    if (!open) {
+      setNaming(null);
+      setAxing(null);
+    }
     if (!open) return;
     const away = (e: MouseEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
@@ -1049,10 +1129,28 @@ function Switcher({
         <div className="reels">
           {current !== null &&
             (naming === null ? (
-              <button className="reel-rename" onClick={() => setNaming(label)}>
-                <PenIcon />
-                Rename
-              </button>
+              <>
+                <button className="reel-rename" onClick={() => setNaming(label)}>
+                  <PenIcon />
+                  Rename
+                </button>
+                <button
+                  className="reel-rename reel-axe"
+                  data-sure={axing === current || undefined}
+                  onClick={() => {
+                    if (axing === current) {
+                      setAxing(null);
+                      setOpen(false);
+                      onDelete(current);
+                    } else {
+                      setAxing(current);
+                    }
+                  }}
+                >
+                  <BinIcon />
+                  {axing === current ? "Really delete this reel?" : "Delete"}
+                </button>
+              </>
             ) : (
               /* The name in a box, where the old one was. Enter keeps it,
                  Escape leaves it alone — the two keys anyone already tries. */
@@ -1111,6 +1209,26 @@ function Switcher({
                       <span className="reel-name">{p.name}</span>
                       <span className="reel-meta">{summary(p)}</span>
                     </span>
+                  </button>
+                  {/* The same two-click delete as above, in the corner of the
+                      row it is about. */}
+                  <button
+                    className="reel-row-axe"
+                    data-sure={axing === p.slug || undefined}
+                    aria-label={
+                      axing === p.slug ? `Really delete ${p.name}` : `Delete ${p.name}`
+                    }
+                    title={axing === p.slug ? "Click again to delete" : `Delete ${p.name}`}
+                    onClick={() => {
+                      if (axing === p.slug) {
+                        setAxing(null);
+                        onDelete(p.slug);
+                      } else {
+                        setAxing(p.slug);
+                      }
+                    }}
+                  >
+                    {axing === p.slug ? "Sure?" : <BinIcon />}
                   </button>
                 </li>
               ))}
@@ -1437,6 +1555,14 @@ function PenIcon() {
   return (
     <Glyph>
       <path d="M11.4 2.4 13.6 4.6 5.4 12.8l-3 0.8 0.8-3z" />
+    </Glyph>
+  );
+}
+
+function BinIcon() {
+  return (
+    <Glyph>
+      <path d="M2.6 4.4h10.8M6 4.4V2.8h4v1.6M4 4.4l0.7 9.1h6.6l0.7-9.1M6.6 7v4.2M9.4 7v4.2" />
     </Glyph>
   );
 }

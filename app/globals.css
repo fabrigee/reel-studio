@@ -1387,6 +1387,53 @@ button:disabled {
   cursor: default;
 }
 
+.reel-list li {
+  display: flex;
+  align-items: center;
+}
+
+.reel-list li > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The per-row delete: out of the way until the row is under the pointer, the
+   way the link × behaves in the materials panel. Scoped under the li so it
+   outweighs `.reel-list button` above — that shared rule's width: 100% would
+   otherwise win and hand the whole row to the bin. */
+.reel-list li > .reel-row-axe {
+  width: auto;
+  flex: none;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--ash-dim);
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.reel-list li:hover > .reel-row-axe,
+.reel-list li > .reel-row-axe:focus-visible,
+.reel-list li > .reel-row-axe[data-sure] {
+  opacity: 1;
+}
+
+/* Deleting a reel has no undo, so the button never acts on its first click:
+   the first turns it red — the safelight, never the spectrum's own orange —
+   and makes it say what it is about to do; the second is on a button that
+   already told you. Closing the menu withdraws the question. */
+.reel-axe:hover:not(:disabled),
+.reel-axe[data-sure],
+.reel-list li > .reel-row-axe:hover,
+.reel-list li > .reel-row-axe[data-sure] {
+  color: var(--safelight);
+  background: rgba(255, 107, 107, 0.09);
+}
+
 .reel-new {
   border-bottom: 1px solid var(--hair);
   border-radius: var(--r-control) var(--r-control) 0 0;
@@ -1527,9 +1574,10 @@ button:disabled {
 
 /* ------------------------------------------------------- what to say to it */
 
-/* The looks you have saved, above the box where you would ask for one. Absent
-   entirely until you save your first — an empty rail teaching a feature is the
-   kind of clutter this panel exists without. */
+/* The looks you have saved, above the box where you would ask for one — plus
+   the one chip that is an action rather than a memory: hand it a video whose
+   look you want, and the look joins this rail. It is how the rail gets its
+   first entry, so it is always here. */
 .styles {
   display: flex;
   flex-wrap: wrap;
@@ -1562,6 +1610,34 @@ button:disabled {
 .styles button:hover {
   background: rgba(252, 175, 69, 0.18);
   border-color: rgba(252, 175, 69, 0.55);
+}
+
+/* Quieter than the styles it makes — dashed, ash — so a full rail still reads
+   as yours, with one door at the end of it. */
+.styles .style-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px dashed var(--edge-strong);
+  background: transparent;
+  color: var(--ash);
+}
+
+.styles .style-add:hover:not(:disabled) {
+  border-color: rgba(252, 175, 69, 0.55);
+  background: rgba(252, 175, 69, 0.06);
+  color: var(--ig-gold);
+}
+
+.styles .style-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Naming the style-to-be, in the place the chip was. */
+.styles .keep-box {
+  margin-left: 0;
+  width: 210px;
 }
 
 /* Naming a style, in the place the button was. */
